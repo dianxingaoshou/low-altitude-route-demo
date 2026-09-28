@@ -39,3 +39,4 @@
 
 /* Wider local basemap extends beyond the flight grid. */
 #geoMap{background:#e9eee9}
+.map-actions{flex-wrap:wrap;justify-content:flex-end}.map-actions button.selected{background:#174a4d;border-color:#60d8c8;color:#d9fff7}@media(max-width:750px){.map-actions button{flex:1 1 calc(50% - 8px)}.map-actions #playBtn{flex-basis:100%}}
