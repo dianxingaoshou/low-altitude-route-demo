@@ -1,0 +1,27 @@
+const assert=require('node:assert/strict');
+require('../model.js');
+const F=require('../flight-engine.js'),W=require('../weather-physics.js');
+const near=(a,b,t=1e-7)=>assert.ok(Math.abs(a-b)<t,`${a} != ${b}`);
+
+const f=new F.Flight();f.configure({dynamic:false});f.run();f.tick(5);f.pause();
+const old=f.remainingPath(),onRoute=old[Math.min(8,old.length-2)];
+const center={x:onRoute.x+.23,y:onRoute.y+.17};
+assert.ok(center.x<60&&center.y<40);
+const before={position:{...f.position},elapsed:f.elapsed,energy:f.usedWh};
+assert.throws(()=>f.gust('strong',{x:61,y:20}),/边框内/);
+assert.equal(f.gusts.length,0);
+assert.equal(f.gust('strong',center),true);
+assert.deepEqual(f.position,before.position);
+near(f.elapsed,before.elapsed);near(f.usedWh,before.energy);
+assert.equal(f.gusts[0].placement,'map');
+near(f.gusts[0].x,center.x);near(f.gusts[0].y,center.y);
+assert.ok(W.sample(f.data.field.gust,center)>0);
+assert.equal(f.data.field.events.length,1);
+assert.match(f.logs[0].text,/旧航线峰值风速/);
+const ll=F.toLatLng(center),exact=F.fromLatLngExact({lat:ll[0],lng:ll[1]});
+near(exact.x,center.x);near(exact.y,center.y);
+const snap=f.snapshot();assert.equal(snap.weather.gusts[0].placement,'map');
+f.clearGust();assert.equal(f.data.field.events.length,0);
+assert.equal(f.gust('moderate'),true);
+assert.equal(f.gusts[0].placement,'front');
+console.log('PASS: map-picked fractional gust center, immediate weather/replan without position/time/energy jump, exact coordinate conversion, invalid-point rejection, clear and front-gust regression.');

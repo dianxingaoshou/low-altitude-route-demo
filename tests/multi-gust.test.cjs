@@ -1,0 +1,40 @@
+const assert=require('node:assert/strict');
+require('../model.js');
+const F=require('../flight-engine.js'),W=require('../weather-physics.js');
+const near=(a,b,t=1e-6)=>assert.ok(Math.abs(a-b)<t,`${a} != ${b}`);
+
+const f=new F.Flight();f.configure({dynamic:false});f.run();f.tick(5);
+const before={position:{...f.position},elapsed:f.elapsed,usedWh:f.usedWh};
+f.gust('wide');assert.equal(f.status,'blocked');assert.ok(f.canInjectGust());
+const first={...f.gusts[0]},center={x:50.23,y:34.17};
+f.gust('moderate',center);assert.equal(f.activeGusts().length,2);
+assert.deepEqual(f.gusts.map(g=>g.id),['G1','G2']);
+assert.equal(f.data.field.events.length,2);
+assert.deepEqual(f.position,before.position);near(f.elapsed,before.elapsed);near(f.usedWh,before.usedWh);
+near(f.gusts[0].x,first.x);near(f.gusts[0].y,first.y);
+near(f.gusts[1].x,center.x);near(f.gusts[1].y,center.y);
+assert.equal(f.snapshot().weather.active_gusts.length,2);
+assert.equal(f.removeGust('G1'),true);
+assert.deepEqual(f.activeGusts().map(g=>g.id),['G2']);
+assert.equal(f.data.field.events.length,1);assert.ok(f.feasible);assert.equal(f.status,'paused');
+assert.equal(f.removeGust('missing'),false);
+f.gust('moderate',center);assert.equal(f.activeGusts().length,2);
+assert.equal(f.gusts.at(-1).id,'G3');
+assert.ok(W.sample(f.data.field.gust,center)>0);
+f.clearGust();assert.equal(f.activeGusts().length,0);assert.equal(f.data.field.events.length,0);
+
+const waiting=new F.Flight();waiting.configure({dynamic:false});waiting.run();waiting.tick(5);
+waiting.gust('wide');waiting.gust('moderate',{x:50,y:34});
+waiting.gusts[1].endAt=waiting.elapsed+300;waiting.updateField();
+assert.equal(waiting.status,'blocked');assert.equal(waiting.waitAssessment().seconds,300);
+assert.ok(waiting.waitOutGust().allowed);waiting.tick(240);
+assert.equal(waiting.status,'running','When the blocking gust expires, resume even if an off-route gust remains');
+assert.deepEqual(waiting.activeGusts().map(g=>g.id),['G2']);
+near(waiting.holdSeconds,240);near(waiting.elapsed,waiting.flightSeconds+waiting.holdSeconds+waiting.swapElapsed);
+
+const capped=new F.Flight();capped.configure({dynamic:false});
+for(let i=0;i<F.MAX_GUSTS;i++)assert.equal(capped.gust('moderate',{x:50+i*.05,y:34}),true);
+assert.equal(capped.activeGusts().length,F.MAX_GUSTS);assert.ok(!capped.canInjectGust());
+assert.throws(()=>capped.gust('moderate',{x:53,y:34}),/最多注入/);
+assert.ok(capped.removeGust('G3'));assert.ok(capped.canInjectGust());
+console.log('PASS: additive gusts with stable IDs, injection while blocked, individual/all removal, earliest feasible wait recovery, and explicit active-event limit.');

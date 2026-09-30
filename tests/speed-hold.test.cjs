@@ -1,0 +1,48 @@
+const assert=require('node:assert/strict');
+require('../model.js');
+const W=require('../weather-physics.js'),F=require('../flight-engine.js');
+const near=(a,b,t=1e-5)=>assert.ok(Math.abs(a-b)<t,`${a} != ${b}`);
+
+const a={x:0,y:0,value:.3,u:0,v:0},b={...a,x:1};
+const segment=v=>W.edge(a,b,{...F.DEFAULTS,speed:v});
+assert.equal(W.speedFactor(12),1);
+assert.ok(segment(6).whPerKm>segment(12).whPerKm);
+assert.ok(segment(18).whPerKm>segment(12).whPerKm);
+assert.ok(segment(18).powerW>segment(12).powerW);
+const slow=new F.Flight(),fast=new F.Flight();
+slow.configure({dynamic:false,capacity:600,speed:8});
+fast.configure({dynamic:false,capacity:600,speed:18});
+assert.ok(slow.feasible&&fast.feasible);
+assert.ok(slow.schedule().etaSeconds>fast.schedule().etaSeconds);
+assert.ok(slow.schedule().energyWh!==fast.schedule().energyWh);
+const liveSpeed=new F.Flight();liveSpeed.configure({dynamic:false,capacity:600});liveSpeed.run();liveSpeed.tick(5);
+const livePosition={...liveSpeed.position},liveElapsed=liveSpeed.elapsed,liveEnergy=liveSpeed.usedWh,oldPower=liveSpeed.instantaneous().powerW,oldPlans=liveSpeed.replans;
+liveSpeed.configure({speed:15});assert.equal(liveSpeed.status,'running');assert.deepEqual(liveSpeed.position,livePosition);
+near(liveSpeed.elapsed,liveElapsed);near(liveSpeed.usedWh,liveEnergy);
+assert.ok(liveSpeed.replans>oldPlans);assert.notEqual(liveSpeed.instantaneous().powerW,oldPower);
+liveSpeed.tick(1);assert.ok(Math.hypot(liveSpeed.position.x-livePosition.x,liveSpeed.position.y-livePosition.y)>0);
+
+const hold=new F.Flight();hold.configure({dynamic:false});hold.run();hold.tick(5);
+hold.gust('wide');assert.equal(hold.status,'blocked');
+const assessment=hold.waitAssessment();assert.ok(assessment.allowed);assert.ok(assessment.energyWh>0);
+const position={...hold.position},energy=hold.usedWh,charge=hold.remainingWh,at=hold.elapsed;
+hold.waitOutGust();assert.equal(hold.status,'waiting');assert.equal(hold.instantaneous().groundSpeed,0);
+hold.tick(60);assert.deepEqual(hold.position,position);assert.ok(hold.elapsed>at);
+assert.ok(hold.usedWh>energy);assert.ok(hold.remainingWh<charge);
+near(hold.elapsed,hold.flightSeconds+hold.holdSeconds+hold.swapElapsed);
+near(hold.holdEnergyWh,hold.usedWh-energy);
+hold.pause();const paused=hold.elapsed;hold.tick(30);near(hold.elapsed,paused);
+hold.run();assert.equal(hold.status,'waiting');
+hold.tick(180);assert.equal(hold.status,'running');assert.equal(hold.data.field.events.length,0);
+assert.ok(hold.feasible);
+for(let n=0;n<6000&&['running','swapping'].includes(hold.status);n++)hold.tick(1);
+assert.equal(hold.status,'arrived');
+near(hold.elapsed,hold.flightSeconds+hold.holdSeconds+hold.swapElapsed);
+assert.ok(hold.remainingWh>=hold.reserveWh-1e-5);
+assert.equal(hold.snapshot().hold_time_s,hold.holdSeconds);
+assert.equal(hold.snapshot().hold_energy_Wh,hold.holdEnergyWh);
+
+const scarce=new F.Flight();scarce.configure({dynamic:false});scarce.run();scarce.tick(5);scarce.gust('wide');
+scarce.batteryWh=scarce.reserveWh+10;assert.ok(!scarce.waitAssessment().allowed);
+assert.match(scarce.waitAssessment().reason,/电量/);
+console.log('PASS: speed-power and Wh/km tradeoff; mission ETA/energy change; safe gust wait consumes time and energy without motion, supports pause and resumes after expiry; reserve blocks waiting.');

@@ -1,0 +1,13 @@
+{
+  "name": "low-altitude-route-demo",
+  "private": true,
+  "version": "1.0.0",
+  "description": "二维低空配送航路、湍流与换电课程仿真",
+  "scripts": {
+    "test": "node tests/model.test.cjs",
+    "experiment": "node experiments/compare.cjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
