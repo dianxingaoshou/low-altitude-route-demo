@@ -1,0 +1,8 @@
+case_id,u,v,ground_speed,power_W,flyable,seconds,energy_Wh,closed_form_ground_speed,closed_form_power_W,closed_form_seconds,closed_form_energy_Wh,energy_error_Wh
+calm,0,0,12,690,1,500,95.8333333333333,12,690,500,95.8333333333333,0
+tailwind,6,0,18,834,1,333.333333333333,77.2222222222222,18,834,333.333333333333,77.2222222222222,0
+headwind,-6,0,6,834,1,1000,231.666666666667,6,834,1000,231.666666666667,0
+crosswind,0,6,10.3923048454133,834,1,577.350269189626,133.752812362263,10.3923048454133,834,577.350269189626,133.752812362263,0
+uncompensable_crosswind,0,12,0,1266,0,NaN,NaN,0,1266,NaN,NaN,NaN
+zero_groundspeed,-12,0,0,1266,0,NaN,NaN,0,1266,NaN,NaN,NaN
+wind_limit,14,0,26,1474,0,NaN,NaN,26,1474,NaN,NaN,NaN

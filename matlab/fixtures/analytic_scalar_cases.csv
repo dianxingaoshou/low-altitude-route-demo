@@ -1,0 +1,7 @@
+case_id,JS_value
+uniform_distance_km,6.000000000000003
+uniform_demo_cost,6.480000000000004
+uniform_paper_cost,203.18012070185992
+hover_power_W,742
+sigma_at_TKE_0_3,0.4472135954999579
+sigma_at_TKE_1_5,1

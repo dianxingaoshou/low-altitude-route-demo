@@ -1,5 +1,11 @@
 # MATLAB 复核与外部依据
 
+## 公式推导与正确性说明
+
+完整推导见 [数学模型推导与程序正确性验证](../docs/model-derivation.md)，可编辑 Word 文件为 [数学模型推导与程序正确性验证说明.docx](../docs/数学模型推导与程序正确性验证说明.docx)。其中包含 35 个公式、TKE 与风三角推导、旋翼质量与速度功率的依据、单位换算、A* 一致性证明、换电账本及经验参数边界，并列出代码和 MATLAB 的覆盖范围。
+
+新增 `verify_analytic_cases.m` 用可手算的闭式答案核对网页：七个固定风况、均匀 TKE 最短路、无风 6 km 耗电、悬停耗电及模型内速度极小值。`run_validation` 会同时执行它；输入随 `npm run matlab:fixtures` 导出。结果在 `analytic_verification_report.txt` 和两个 `analytic_*_verified.csv` 中。独立手算答案减少两套实现重复同一错误的风险，但不替代机型实测标定。
+
 ## 一键复核
 
 本机已用 MATLAB R2024b 实际运行，下列检查全部通过。先在仓库根目录生成同一批输入，再让 MATLAB **独立重算**：

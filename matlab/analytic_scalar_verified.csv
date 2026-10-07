@@ -1,0 +1,7 @@
+case_id,JS_value,closed_form_value,absolute_error
+uniform_distance_km,6,6,2.66453525910038e-15
+uniform_demo_cost,6.48,6.48,3.5527136788005e-15
+uniform_paper_cost,203.18012070186,203.18012070186,1.4210854715202e-13
+hover_power_W,742,742,0
+sigma_at_TKE_0_3,0.447213595499958,0.447213595499958,0
+sigma_at_TKE_1_5,1,1,0

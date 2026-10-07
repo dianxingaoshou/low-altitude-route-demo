@@ -1,0 +1,7 @@
+PASS seven closed-form wind cases; six scalar web checks.
+Calm 6 km: 500 s, 690 W, 95.83333333 Wh.
+Hover 120 s: 742 W, 24.73333333 Wh.
+Teaching-model minimum-power speed: 8.02488366 m/s.
+Teaching-model calm minimum-Wh/km speed (payload 1 kg, TKE 0.3): 11.47731265 m/s.
+PASS analytic battery/time arithmetic; this ledger does not replay the JS mission planner.
+LIMIT: equations and synthetic coefficients are not calibrated aircraft performance.
