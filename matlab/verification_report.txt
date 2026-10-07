@@ -1,0 +1,11 @@
+MATLAB R2024b independent numeric validation
+Same synthetic inputs as the web demo; this is software verification, not field validation.
+PASS seed 20260923: shortest 6.0000 km; MATLAB Dijkstra paper cost 241.2726; JS A* 241.2726
+PASS seed 20260924: shortest 6.0000 km; MATLAB Dijkstra paper cost 46.4556; JS A* 46.4556
+PASS seed 20260925: shortest 6.0000 km; MATLAB Dijkstra paper cost 24.9537; JS A* 24.9537
+PASS 9 route metric checks: distance, TKE dose, flight time, energy, paper cost
+PASS battery relay: no-station infeasible; one swap; 909.35 + 120.00 = 1029.35 s
+PASS 6 local wind-safety cases: calm, tailwind, excessive headwind/crosswind/wind limit
+PASS model sensitivity: 12 m/s uses less Wh/km than 6 and 18 m/s; larger payload raises power.
+LIMIT: source fields, wind constraints and numeric coefficients are synthetic; no real-weather or flight-data validation.
+ALL CHECKS PASSED
