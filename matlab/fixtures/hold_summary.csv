@@ -1,0 +1,2 @@
+start_s,end_s,initial_battery_Wh,final_battery_Wh,wait_s,wait_energy_Wh,final_status_code,blocked_time_delta,blocked_energy_delta,blocked_motion_m
+5,245,207.70247965251482,140.89446907547708,240,66.80801057703765,1,0,0,0

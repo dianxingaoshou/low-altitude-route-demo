@@ -23,4 +23,4 @@ npm run experiment
 
 实验脚本 `experiments/compare.cjs` 固定三组种子，在相同二维天气和安全约束下比较最短距离、第一份课程 D 题资料距离＋TKE 代价的二维适配 A*（程序标签“论文代价”），以及网页的综合代价路线；还比较模拟观测来源和长距离任务能否换电。结果写入 `experiments/results/`。这些结果来自合成场，仅能说明本仿真中的权衡与程序一致性，不能当作原资料实验或萧山实测结论。测试脚本位于 `tests/`，检查路线、天气耦合、阵风、换电、能耗与计时。
 
-如安装 MATLAB R2024b，可运行 `npm run matlab:fixtures`，再在仓库根目录执行 `matlab -batch "addpath('matlab'); verify_demo"`。MATLAB 用 Dijkstra 和独立航段公式核对三组种子、九条航路及换电计时；运行记录见 `matlab/verification_report.txt`，方法与可引用的论文、真实案例和规范的适用边界见 [`matlab/README.md`](matlab/README.md)。
+如安装 MATLAB R2024b，可运行 `npm run matlab:fixtures`，再在 MATLAB 当前文件夹设为仓库根目录后执行 `addpath('matlab'); run_validation;`。MATLAB 用 Dijkstra 和独立航段公式核对三组种子、九条航路、96 组速度/载荷/TKE 参数、换电回放和阵风等待积分，生成六组 PNG/PDF/FIG 图片及合并 PDF，保存在 `matlab/figures/`。运行记录见 `matlab/verification_report.txt`，操作、读图说明与可核查的论文和规范见 [`matlab/README.md`](matlab/README.md)。

@@ -4,8 +4,12 @@ PASS seed 20260923: shortest 6.0000 km; MATLAB Dijkstra paper cost 241.2726; JS 
 PASS seed 20260924: shortest 6.0000 km; MATLAB Dijkstra paper cost 46.4556; JS A* 46.4556
 PASS seed 20260925: shortest 6.0000 km; MATLAB Dijkstra paper cost 24.9537; JS A* 24.9537
 PASS 9 route metric checks: distance, TKE dose, flight time, energy, paper cost
+Maximum route time error 0.00490706 s; energy error 0.00498050 Wh (rounding tolerance 0.005001).
 PASS battery relay: no-station infeasible; one swap; 909.35 + 120.00 = 1029.35 s
 PASS 6 local wind-safety cases: calm, tailwind, excessive headwind/crosswind/wind limit
 PASS model sensitivity: 12 m/s uses less Wh/km than 6 and 18 m/s; larger payload raises power.
+PASS 96 speed/payload/TKE sweep cases independently recalculated.
+PASS 1031 mission replay points: time ledger, reserve battery, swap reset and final ETA.
+PASS 240 gust-wait steps: zero displacement, 66.808011 Wh independently integrated, automatic recovery.
 LIMIT: source fields, wind constraints and numeric coefficients are synthetic; no real-weather or flight-data validation.
 ALL CHECKS PASSED
