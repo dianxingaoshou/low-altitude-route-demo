@@ -36,7 +36,7 @@ MATLAB 使用 [MathWorks `digraph` 与 `shortestpath` 官方文档](https://www.
 
 | 类型与依据 | 对应本项目 | 边界 |
 |---|---|---|
-| 已发表期刊论文：[Rienecker H., Hildebrand V., Pfifer H., *CEAS Aeronautical Journal* 14, 621–636 (2023), DOI:10.1007/s13272-023-00666-x](https://link.springer.com/article/10.1007/s13272-023-00666-x) | 城市模拟风场、A* 与能量优化路径 | 论文研究三维固定翼城市模型，不是本二维多旋翼概念模型的实测验证 |
+| 已发表期刊论文：[Rienecker H., Hildebrand V., Pfifer H., *CEAS Aeronautical Journal* 14, 621–636 (2023), DOI:10.1007/s13272-023-00666-x](https://link.springer.com/article/10.1007/s13272-023-00666-x) | 城市模拟风场、A* 与能量优化路径 | 论文研究三维固定翼城市模型，不是本二维教学机型的实测验证 |
 | 已发表期刊论文：[Gu R., Zhao Y., Ren X., *Chinese Journal of Aeronautics* 39(1), 103605 (2026), DOI:10.1016/j.cja.2025.103605](https://www.sciencedirect.com/science/article/pii/S1000936125002110) | 风向、地速、湍流约束和能耗耦合的城市物流规划 | 深圳案例的百分比不能挪作萧山或本网页的结果 |
 | 已发表期刊论文：[Huang C., Ming Z., Huang H., *IEEE Transactions on Automation Science and Engineering* 20(4), 2294–2304 (2023), DOI:10.1109/TASE.2022.3213254](https://ieeexplore.ieee.org/abstract/document/9917491/) | 用无人机站与换电扩展受电池限制的配送航程，并考虑任务时间 | 支持设站和换电的研究方向；不证明模拟站点真实存在，也不支持固定 120 秒参数；[高校机构库记录](https://ira.lib.polyu.edu.hk/handle/10397/98854?mode=simple)可核对完整书目信息 |
 | 现行运行规章：[CCAR-92《民用无人驾驶航空器运行安全管理规则》](https://xxgk.mot.gov.cn/2020/jigou/fgs/202401/t20240103_3980642.html) | 第 92.545 条列出气象、障碍、通信覆盖等运行环境信息；第 92.695 条提到气象条件限制与能量源要求；第 92.703 条涉及重量限制 | 这是实际运行的规章，不是 A* 或本网页算法的认证标准；具体适用要求需按运行类别核定 |
