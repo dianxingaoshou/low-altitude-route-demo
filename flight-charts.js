@@ -82,7 +82,7 @@
       });
     }
     draw(ctx,w,h,plot,bounds,cursor){
-      ctx.clearRect(0,0,w,h);const l=49,r=16,top=24,bottom=30,gw=Math.max(1,w-l-r),gh=h-top-bottom;
+      ctx.fillStyle='#0d1a2b';ctx.fillRect(0,0,w,h);const l=49,r=16,top=24,bottom=30,gw=Math.max(1,w-l-r),gh=h-top-bottom;
       const px=t=>l+(t-bounds.start)/(bounds.end-bounds.start)*gw;
       const visible=this.rows.filter(row=>row.time_s>=bounds.start-1e-7&&row.time_s<=bounds.end+1e-7);
       const prev=this.rows.filter(row=>row.time_s<bounds.start);if(prev.length)visible.unshift(prev[prev.length-1]);
