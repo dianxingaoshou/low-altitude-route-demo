@@ -5,3 +5,4 @@ require('./seeded-weather.test.cjs');
 require('./speed-hold.test.cjs');
 require('./manual-gust.test.cjs');
 require('./multi-gust.test.cjs');
+require('./flight-telemetry.test.cjs');
