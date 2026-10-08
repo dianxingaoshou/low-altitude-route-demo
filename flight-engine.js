@@ -14,6 +14,14 @@
   function cost(a,b,d,cfg){return M.edgeCost(a,b,d,cfg.lambda)+cfg.energyWeight*energy(a,b,d,cfg)/20;}
   function routeMetrics(path,cfg){const m=M.metrics(path,cfg.lambda);if(!m)return null;let wh=0,j=0,seconds=0;for(let i=1;i<path.length;i++){const a=path[i-1],b=path[i],d=M.STEP*Math.hypot(a.x-b.x,a.y-b.y),e=b.segment||W.edge(a,b,cfg),dt=d*1000/Math.max(.01,e.groundSpeed),en=e.powerW*dt/3600;wh+=en;seconds+=dt;j+=M.edgeCost(a.value,b.value,d,cfg.lambda)+cfg.energyWeight*en/20;}return {...m,energyWh:wh,cost:j,timeMinutes:seconds/60};}
   function flatten(legs){return legs.flatMap((l,i)=>i?l.path.slice(1):l.path);}
+  function objectiveCost(a,b,d,e,cfg){
+    if(cfg.strategy==='distance')return d;
+    if(cfg.strategy==='energy')return e.energyWh;
+    if(cfg.strategy==='turbulence')return d*(.05+(a+b)/2);
+    return M.edgeCost(a,b,d,cfg.lambda)+cfg.energyWeight*e.energyWh/20;
+  }
+  function objectiveSwap(cfg){const d=cfg.swapSeconds*cfg.speed/1000;return cfg.strategy==='energy'?1e-6:cfg.strategy==='turbulence'?d*.05:d;}
+  function routeObjective(path,cfg){let score=0;for(let i=1;i<path.length;i++){const a=path[i-1],b=path[i],d=M.STEP*Math.hypot(b.x-a.x,b.y-a.y);score+=objectiveCost(a.value,b.value,d,b.segment||W.edge(a,b,cfg),cfg);}return score;}
   // Pareto labels on the small station/waypoint graph. Each edge offers a
   // weighted A* path and a minimum-energy path, rather than all possible paths.
   function planMission(field,cfg,from,end,waypoints,battery){
@@ -23,10 +31,11 @@
     function routes(a,b){const key=`${a.x},${a.y}:${b.x},${b.y}`;if(cache.has(key))return cache.get(key);const opts={start:a,end:b};
       const choices=[];const starts=[];for(const x of new Set([Math.floor(a.x),Math.ceil(a.x)]))for(const y of new Set([Math.floor(a.y),Math.ceil(a.y)]))starts.push({x,y});
       for(const start of starts){if(!W.safeSegment(field,a,start,cfg))continue;for(const energyOnly of [false,true]){
-        const p=M.plan(field,cfg.lambda,cfg.hard,!energyOnly,{...opts,start,allowed:i=>!field.blocked?.[i],edgeAllowed:(u,v)=>gridEdge(u,v).safe,cost:(x,y,d,u,v)=>{const e=gridEdge(u,v);return energyOnly?e.energyWh:M.edgeCost(x,y,d,cfg.lambda)+cfg.energyWeight*e.energyWh/20;}}).path;
-        if(p){const path=W.annotate(same(a,start)?p:[a,...p],field,cfg);choices.push({path,metrics:routeMetrics(path,cfg)});}
+        const heuristic=!energyOnly&&!['energy','turbulence'].includes(cfg.strategy);
+        const p=M.plan(field,cfg.lambda,cfg.hard,heuristic,{...opts,start,allowed:i=>!field.blocked?.[i],edgeAllowed:(u,v)=>gridEdge(u,v).safe,cost:(x,y,d,u,v)=>{const e=gridEdge(u,v);return energyOnly?e.energyWh:objectiveCost(x,y,d,e,cfg);}}).path;
+        if(p){const path=W.annotate(same(a,start)?p:[a,...p],field,cfg);choices.push({path,metrics:routeMetrics(path,cfg),objective:routeObjective(path,cfg)});}
       }}
-      const paths=[];if(choices.length){const byCost=[...choices].sort((a,b)=>a.metrics.cost-b.metrics.cost)[0],byEnergy=[...choices].sort((a,b)=>a.metrics.energyWh-b.metrics.energyWh)[0];paths.push(byCost);if(byEnergy.metrics.energyWh<byCost.metrics.energyWh-1e-7)paths.push(byEnergy);}
+      const paths=[];if(choices.length){const byCost=[...choices].sort((a,b)=>a.objective-b.objective)[0],byEnergy=[...choices].sort((a,b)=>a.metrics.energyWh-b.metrics.energyWh)[0];paths.push(byCost);if(byEnergy.metrics.energyWh<byCost.metrics.energyWh-1e-7)paths.push(byEnergy);}
       cache.set(key,paths);return paths;
     }
     const labels=new Map(),queue=[];let seq=0;
@@ -48,22 +57,25 @@
           // A destination coincident with a station is delivered without an unnecessary swap.
           const actuallySwap=swap&&!(progress===waypoints.length&&same(target,end));
           const leg={...route,target,swap:actuallySwap};
-          push({point:target,progress,battery:actuallySwap?cfg.capacity:left,score:cur.score+route.metrics.cost+(actuallySwap?cfg.swapSeconds*cfg.speed/1000:0),legs:[...cur.legs,leg]});
+          push({point:target,progress,battery:actuallySwap?cfg.capacity:left,score:cur.score+route.objective+(actuallySwap?objectiveSwap(cfg):0),legs:[...cur.legs,leg]});
         }
       }
     }
     return null;
   }
   class Flight{
-    constructor(){this.cfg={...DEFAULTS,sources:[...DEFAULTS.sources]};this.start={...M.START};this.end={...M.END};this.waypoints=[];this.reset();}
-    reset(){this.telemetry=new T.Recorder({weatherSample:W.diagnostics,coordinates:toLatLng});this.status='ready';this.elapsed=0;this.weatherElapsed=0;this.flightSeconds=0;this.holdSeconds=0;this.holdEnergyWh=0;this.swapElapsed=0;this.completedSwaps=0;this.swaps=[];this.swapRemaining=0;this.activeStation=null;this.resumeStatus=null;this.waitUntil=null;this.usedWh=0;this.batteryWh=this.cfg.capacity*this.cfg.charge/100;this.travelKm=0;this.node={...this.start};this.position={...this.start};this.trail=[{...this.start}];this.replans=0;this.fieldRevision=0;this.logs=[];this.lastReplan=-1e9;this.lastField=-1e9;this.pending=false;this.index=0;this.edgeProgress=0;this.gusts=[];this.nextGustId=1;this.gustReferencePath=null;this.decision=null;this.nextWaypoint=0;this.visits=[];this.path=null;this.itinerary=[];this.replan('初始化任务');}
+    constructor(options={}){this.cfg={...DEFAULTS,...options.cfg,sources:[...(options.cfg?.sources||DEFAULTS.sources)]};this.start={...(options.start||M.START)};this.end={...(options.end||M.END)};this.waypoints=(options.waypoints||[]).map(p=>({...p}));this.frozenData=options.frozenData||null;this.initialBatteryWh=options.batteryWh??null;this.reset();}
+    reset(){this.telemetry=new T.Recorder({weatherSample:W.diagnostics,coordinates:toLatLng});this.status='ready';this.elapsed=0;this.weatherElapsed=0;this.flightSeconds=0;this.holdSeconds=0;this.holdEnergyWh=0;this.swapElapsed=0;this.completedSwaps=0;this.swaps=[];this.swapRemaining=0;this.activeStation=null;this.resumeStatus=null;this.waitUntil=null;this.usedWh=0;this.batteryWh=this.initialBatteryWh??(this.cfg.capacity*this.cfg.charge/100);this.travelKm=0;this.node={...this.start};this.position={...this.start};this.trail=[{...this.start}];this.replans=0;this.fieldRevision=0;this.logs=[];this.lastReplan=-1e9;this.lastField=-1e9;this.pending=false;this.index=0;this.edgeProgress=0;this.gusts=[];this.nextGustId=1;this.gustReferencePath=null;this.gustReferenceLegs=null;this.decisionInput=null;this.cachedAssessment=null;this.decision=null;this.nextWaypoint=0;this.visits=[];this.path=null;this.itinerary=[];this.replan('初始化任务');}
     get remainingWh(){return Math.max(0,this.batteryWh);}
     get reserveWh(){return this.cfg.capacity*this.cfg.reserve/100;}
     get clock(){return this.cfg.time+(this.weatherElapsed||0);}
     log(text,type='replan'){this.logs.unshift({at:this.elapsed,text});this.telemetry.event(this,type,text);}
+    remainingLegs(){return this.itinerary.map((l,i)=>({...l,path:i===0&&this.path?this.remainingPath().slice(0,this.path.length-this.index):l.path}));}
+    decisionAssessment(){if(!this.decision||!this.decisionInput||!root.MissionAnalysis)return null;if(!this.cachedAssessment)this.cachedAssessment=root.MissionAnalysis.assess(this.decisionInput);return this.cachedAssessment;}
+    captureDecision(legs,before){if(root.MissionAnalysis){this.decisionInput=root.MissionAnalysis.capture(this,{originalLegs:legs,before});this.cachedAssessment=null;}}
     activeGusts(){return this.gusts.filter(g=>Number.isFinite(g.endAt)&&g.endAt>this.elapsed+1e-8);}
     canInjectGust(){return !['arrived','waiting'].includes(this.status)&&this.resumeStatus!=='waiting'&&this.activeGusts().length<MAX_GUSTS&&(this.remainingPath().length>=2||this.gustReferencePath?.length>=2);}
-    updateField(){const previous=this.data?.field?.events||[];this.data=W.decorate(M.buildField({altitude:300,time:this.clock,seed:this.cfg.seed,sources:this.cfg.sources}),this.gusts,this.elapsed);this.fieldRevision++;this.lastField=this.elapsed;for(const g of previous)if(g.endAt<=this.elapsed+1e-8&&!this.data.field.events.some(e=>e.id===g.id))this.log(g.id+' 阵风结束','gust');}
+    updateField(){if(this.frozenData){this.data=this.frozenData;this.fieldRevision++;this.lastField=this.elapsed;return;}const previous=this.data?.field?.events||[];this.data=W.decorate(M.buildField({altitude:300,time:this.clock,seed:this.cfg.seed,sources:this.cfg.sources}),this.gusts,this.elapsed);this.fieldRevision++;this.lastField=this.elapsed;for(const g of previous)if(g.endAt<=this.elapsed+1e-8&&!this.data.field.events.some(e=>e.id===g.id))this.log(g.id+' 阵风结束','gust');}
     markWaypoints(){let changed=false;while(this.nextWaypoint<this.waypoints.length&&same(this.node,this.waypoints[this.nextWaypoint])){this.visits.push({index:this.nextWaypoint,at:this.elapsed,point:{...this.node}});this.log('已到达途经点 W'+(this.nextWaypoint+1),'task');this.nextWaypoint++;changed=true;}return changed;}
     replan(reason='滚动更新'){
       if(this.elapsed>0&&!same(this.trail[this.trail.length-1],this.node))this.trail.push({...this.node});
@@ -89,6 +101,7 @@
     run(){if(this.status==='arrived')return;if(this.status==='paused'&&this.resumeStatus==='waiting'&&this.waitUntil>this.elapsed){this.status='waiting';this.resumeStatus=null;this.log('继续安全位置等待','wait');return;}if(this.swapRemaining>0){this.status='swapping';this.log('继续换电','swap');return;}if(this.edgeProgress===0)this.replan('出发前校验');if(!this.feasible){this.status='blocked';this.log('无法起飞：'+this.reason,'control');return;}this.status='running';this.log('开始 / 继续模拟飞行','control');}
     pause(){if(['running','swapping','waiting'].includes(this.status)){this.resumeStatus=this.status;this.status='paused';this.log('暂停模拟（计时与耗电暂停）','control');}}
     gust(kind='strong',center=null){
+      const referenceLegs=this.remainingPath().length>=2?this.remainingLegs():this.gustReferenceLegs;if(referenceLegs?.length)this.gustReferenceLegs=referenceLegs;
       const spec=W.TYPES[kind]||W.TYPES.strong,currentPath=this.remainingPath();if(currentPath.length>=2)this.gustReferencePath=currentPath.map(p=>({...p}));const oldPath=currentPath.length>=2?currentPath:this.gustReferencePath;if(!oldPath||oldPath.length<2)return false;
       if(this.activeGusts().length>=MAX_GUSTS)throw Error(`同时最多注入 ${MAX_GUSTS} 处阵风；请先移除一处。`);
       if(center&&(!Number.isFinite(center.x)||!Number.isFinite(center.y)||center.x<0||center.y<0||center.x>M.NX-1||center.y>M.NY-1))throw Error('阵风中心必须位于教学地图边框内。');
@@ -98,20 +111,21 @@
       const id='G'+this.nextGustId++;this.gusts.push({...spec,id,kind,placement:center?'map':'front',x:p.x,y:p.y,u:-heading.x*spec.strength,v:-heading.y*spec.strength,createdAt:this.elapsed,endAt:this.elapsed+240});this.updateField();
       const underWeather=W.annotate(oldPath,this.data.field,this.cfg);let unsafe=0,peakWind=0,peakPower=0;
       for(let i=1;i<underWeather.length;i++){const e=underWeather[i].segment;if(!W.safeSegment(this.data.field,underWeather[i-1],underWeather[i],this.cfg))unsafe++;peakWind=Math.max(peakWind,e.windSpeed);peakPower=Math.max(peakPower,e.powerW);}
-      if(this.swapRemaining>0){this.pending=true;this.decision={action:'换电后避险',detail:`已叠加第 ${this.activeGusts().length} 处阵风；正在地面换电，完成后按合成风场重新规划。`,unsafe,peakWind,peakPower,before,at:this.elapsed};this.log(id+' 已注入，完成换电后重新评估航路','gust');return true;}
+      if(this.swapRemaining>0){this.pending=true;this.decision={action:'换电后避险',detail:`已叠加第 ${this.activeGusts().length} 处阵风；正在地面换电，完成后按合成风场重新规划。`,unsafe,peakWind,peakPower,before,baselineAvailable:currentPath.length>=2,at:this.elapsed};this.log(id+' 已注入，完成换电后重新评估航路','gust');this.captureDecision(referenceLegs,currentPath.length>=2?before:null);return true;}
       this.node={...this.position};this.replan(`新增 ${id} 阵风后立即评估`);if(wasBlocked&&this.feasible)this.status=this.elapsed?'paused':'ready';const after=this.remainingMetrics();this.decision={action:this.feasible?(unsafe?'已绕开危险区':center?'所选阵风已注入 · 当前航线仍可行':'已按风耗重选路线'):'无可行路线 · 保护停演',detail:this.feasible?`当前 ${this.activeGusts().length} 处阵风共同作用；旧航线有 ${unsafe} 段不满足风况限制，已重新检查途经点、换电与保留电量。`:this.reason,unsafe,peakWind,peakPower,before,after,at:this.elapsed};
-      this.log(id+' · '+this.decision.action+` · 旧航线峰值风速 ${peakWind.toFixed(1)} m/s`,'gust');return true;
+      this.decision.baselineAvailable=currentPath.length>=2;this.log(id+' · '+this.decision.action+` · 旧航线峰值风速 ${peakWind.toFixed(1)} m/s`,'gust');this.captureDecision(referenceLegs,currentPath.length>=2?before:null);return true;
     }
     removeGust(id){const before=this.gusts.length;this.gusts=this.gusts.filter(g=>g.id!==id);if(this.gusts.length===before)return false;this.afterGustRemoval(`已移除 ${id}`);this.log(`已移除 ${id}`,'gust');return true;}
     clearGust(){if(!this.gusts.length)return;this.gusts=[];this.afterGustRemoval('已清除全部模拟阵风');this.log('已清除全部模拟阵风','gust');}
     afterGustRemoval(label){this.decision=null;if(this.swapRemaining>0){this.pending=true;this.updateField();this.log(label+'，换电结束后更新路线');return;}const blocked=this.status==='blocked',wasWaiting=this.status==='waiting'||this.resumeStatus==='waiting';this.waitUntil=null;this.resumeStatus=null;this.node={...this.position};this.replan(label+' · 重新评估剩余阵风');if((blocked||wasWaiting)&&this.feasible)this.status=this.elapsed?'paused':'ready';if(wasWaiting&&!this.feasible)this.status='blocked';}
     refreshWeather(seed){
       if(!Number.isInteger(seed)||seed<0||seed>4294967295)throw Error('天气种子必须是 32 位非负整数。');
-      const before=this.remainingMetrics(),oldPath=this.remainingPath(),blocked=this.status==='blocked';this.cfg.seed=seed;this.decision=null;if(this.status==='waiting'){this.updateField();if(!W.safePoint(this.data.field,this.position,this.cfg)){this.status='blocked';this.reason='等待点已不满足风况安全阈值，模拟停止。';}this.log('已刷新随机天气，检查原地等待条件');return;}
+      const before=this.remainingMetrics(),oldPath=this.remainingPath(),oldLegs=this.remainingLegs(),blocked=this.status==='blocked';this.cfg.seed=seed;this.decision=null;this.decisionInput=null;this.cachedAssessment=null;if(this.status==='waiting'){this.updateField();if(!W.safePoint(this.data.field,this.position,this.cfg)){this.status='blocked';this.reason='等待点已不满足风况安全阈值，模拟停止。';}this.decision={action:this.status==='waiting'?'天气已刷新 · 继续检查安全等待':'等待点超限 · 保护停演',detail:this.status==='waiting'?'天气已刷新；按新天气重新估算等待与后续任务。':this.reason,at:this.elapsed};this.decision.baselineAvailable=oldLegs.length>0;this.captureDecision(oldLegs.length?oldLegs:this.gustReferenceLegs,oldLegs.length?before:null);this.log('已刷新随机天气，检查原地等待条件');return;}
       if(this.swapRemaining>0){this.pending=true;this.updateField();this.log('已刷新随机天气，换电结束后重新规划');}
       else{this.node={...this.position};this.replan('刷新随机天气 · 种子 '+seed);if(blocked&&this.feasible)this.status=this.elapsed?'paused':'ready';}
       if(this.data.field.events.length){const route=W.annotate(oldPath,this.data.field,this.cfg);let unsafe=0,peakWind=0,peakPower=0;for(let i=1;i<route.length;i++){const e=route[i].segment;unsafe+=!W.safeSegment(this.data.field,route[i-1],route[i],this.cfg);peakWind=Math.max(peakWind,e.windSpeed);peakPower=Math.max(peakPower,e.powerW);}
         this.decision={action:this.swapRemaining>0?'换电后避险':this.feasible?'天气已刷新 · 已复核阵风避险':'无可行路线 · 保护停演',detail:this.swapRemaining>0?'手动阵风已保留，地面换电结束后按新天气重新规划。':this.feasible?'手动阵风仍然有效；已从当前位置重新检查航路、换电站与电量。':this.reason,unsafe,peakWind,peakPower,before,after:this.remainingMetrics(),at:this.elapsed};
+        this.decision.baselineAvailable=oldLegs.length>0;this.captureDecision(oldLegs.length?oldLegs:this.gustReferenceLegs,oldLegs.length?before:null);
       }
     }
     previewWeather(minutes=1){this.assertEditable();this.cfg.time=Math.max(0,this.cfg.time+minutes);this.replan('天气预演：推进 '+minutes+' 分钟');}
@@ -135,7 +149,7 @@
       if(leg?.swap){this.activeStation=leg.target;this.swapRemaining=this.cfg.swapSeconds;this.status='swapping';this.log(`到达 ${leg.target.id}，开始换电，固定 ${this.cfg.swapSeconds} 秒`,'swap');}
       else this.replan('已访问途经点');
     }
-    expireWeather(){if(this.status==='waiting')return;if(!(this.data.field.events||[]).some(g=>Number.isFinite(g.endAt)&&g.endAt<=this.elapsed+1e-8))return;if(this.swapRemaining>0){this.updateField();this.pending=true;this.log('手动阵风已结束，换电完成后重规划');}else{this.node={...this.position};if(!same(this.trail[this.trail.length-1],this.node))this.trail.push({...this.node});this.replan('手动阵风已结束，立即重新评估');}}
+    expireWeather(){if(this.frozenData||this.status==='waiting')return;if(!(this.data.field.events||[]).some(g=>Number.isFinite(g.endAt)&&g.endAt<=this.elapsed+1e-8))return;if(this.swapRemaining>0){this.updateField();this.pending=true;this.log('手动阵风已结束，换电完成后重规划');}else{this.node={...this.position};if(!same(this.trail[this.trail.length-1],this.node))this.trail.push({...this.node});this.replan('手动阵风已结束，立即重新评估');}}
     tick(seconds){if(!Number.isFinite(seconds)||seconds<0)throw Error('无效时间步长');let remaining=seconds;
       while(remaining>1e-8&&['running','swapping','waiting'].includes(this.status)){
         this.expireWeather();if(!['running','swapping','waiting'].includes(this.status))break;const deadline=Math.min(Infinity,...this.gusts.filter(g=>Number.isFinite(g.endAt)&&g.endAt>this.elapsed+1e-8).map(g=>g.endAt-this.elapsed));
@@ -176,7 +190,7 @@
       const swapping=this.swapRemaining>0,swapSeconds=futureSwaps*this.cfg.swapSeconds+(swapping?this.swapRemaining:0);
       return {flightSeconds:flight,holdSeconds:this.holdSeconds,swapSeconds,totalSeconds:flight+swapSeconds,etaSeconds:this.elapsed+flight+swapSeconds,arrivalWh:charge,nextLegEnergyWh:firstEnergy,futureSwaps:futureSwaps+(swapping?1:0),energyWh:m.energyWh,feasible:this.feasible,stops:this.itinerary.filter(l=>l.swap).map(l=>l.target.id)};
     }
-    snapshot(){return {version:7,data:'教学模拟，非真实遥测',parameters:{...this.cfg},status:this.status,start:toLatLng(this.start),end:toLatLng(this.end),waypoints:this.waypoints.map(toLatLng),waypoint_visits:this.visits,stations:STATIONS.map(s=>({...s,coordinate:toLatLng(s)})),position:toLatLng(this.position),elapsed_s:this.elapsed,flight_time_s:this.flightSeconds,hold_time_s:this.holdSeconds,hold_energy_Wh:this.holdEnergyWh,wait_until_s:this.waitUntil,swap_time_s:this.swapElapsed,completed_swaps:this.completedSwaps,swap_records:this.swaps,flown_km:this.travelKm,energy_used_Wh:this.usedWh,remaining_Wh:this.remainingWh,reserve_Wh:this.reserveWh,replans:this.replans,reason:this.reason,remaining_schedule:this.schedule(),remaining_route:this.remainingMetrics(),planned_route:this.remainingPath().map(toLatLng),actual_track:[...this.trail,this.position].map(toLatLng),weather:{source:'synthetic',snapshot_min:this.data.time,seed:this.cfg.seed,events:this.data.events,wind_affects_energy:true,local_coupling:this.weatherAt(this.position),gusts:this.gusts,active_gusts:this.data.field.events,decision:this.decision},instantaneous:this.instantaneous(),logs:this.logs,flight_history:this.telemetry.snapshot(this)};}
+    snapshot(){return {version:7,data:'教学模拟，非真实遥测',parameters:{...this.cfg},status:this.status,start:toLatLng(this.start),end:toLatLng(this.end),waypoints:this.waypoints.map(toLatLng),waypoint_visits:this.visits,stations:STATIONS.map(s=>({...s,coordinate:toLatLng(s)})),position:toLatLng(this.position),elapsed_s:this.elapsed,flight_time_s:this.flightSeconds,hold_time_s:this.holdSeconds,hold_energy_Wh:this.holdEnergyWh,wait_until_s:this.waitUntil,swap_time_s:this.swapElapsed,completed_swaps:this.completedSwaps,swap_records:this.swaps,flown_km:this.travelKm,energy_used_Wh:this.usedWh,remaining_Wh:this.remainingWh,reserve_Wh:this.reserveWh,replans:this.replans,reason:this.reason,remaining_schedule:this.schedule(),remaining_route:this.remainingMetrics(),planned_route:this.remainingPath().map(toLatLng),actual_track:[...this.trail,this.position].map(toLatLng),weather:{source:'synthetic',snapshot_min:this.data.time,seed:this.cfg.seed,events:this.data.events,wind_affects_energy:true,local_coupling:this.weatherAt(this.position),gusts:this.gusts,active_gusts:this.data.field.events,decision:this.decision},instantaneous:this.instantaneous(),logs:this.logs,candidate_assessment:this.decisionAssessment(),flight_history:this.telemetry.snapshot(this)};}
   }
-  root.FlightModel={Flight,DEFAULTS,MAX_GUSTS,STATIONS,CELL,toLatLng,fromLatLng,fromLatLngExact,power,energy,cost,routeMetrics,planMission,origin};if(typeof module!=='undefined'&&module.exports)module.exports=root.FlightModel;
+  root.FlightModel={Flight,DEFAULTS,MAX_GUSTS,STATIONS,CELL,toLatLng,fromLatLng,fromLatLngExact,power,energy,cost,routeMetrics,planMission,objectiveCost,routeObjective,origin};if(typeof module!=='undefined'&&module.exports){module.exports=root.FlightModel;require('./mission-analysis.js');}
 })(typeof globalThis!=='undefined'?globalThis:this);
